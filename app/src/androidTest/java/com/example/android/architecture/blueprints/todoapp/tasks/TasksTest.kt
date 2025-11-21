@@ -36,7 +36,7 @@ import com.example.android.architecture.blueprints.todoapp.HiltTestActivity
 import com.example.android.architecture.blueprints.todoapp.R
 import com.example.android.architecture.blueprints.todoapp.TodoNavGraph
 import com.example.android.architecture.blueprints.todoapp.data.TaskRepository
-import com.google.accompanist.appcompattheme.AppCompatTheme
+import androidx.compose.material.MaterialTheme
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
@@ -291,7 +291,7 @@ class TasksTest {
 
     private fun setContent() {
         composeTestRule.setContent {
-            AppCompatTheme {
+            MaterialTheme { // Changed to MaterialTheme
                 TodoNavGraph()
             }
         }
