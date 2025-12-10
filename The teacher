@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>السجل المدرسي - الإصدار البلاتينيوم</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: {} } }
+    </script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;700&family=Noto+Sans+Arabic:wght@400;700&family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        @media print {
+            @page { size: A4 portrait; margin: 0; }
+            body { background-color: white !important; color: black !important; margin: 0; padding: 0; visibility: hidden; overflow: hidden; }
+            #printContainer { visibility: visible; position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+            .no-print { display: none !important; }
+            .a4-page {
+                width: 210mm; height: 296mm; page-break-after: always; margin: 0 auto; 
+                padding: 10mm 12mm; background-color: white !important; 
+                position: relative; box-sizing: border-box; 
+                display: flex; flex-direction: column; justify-content: space-between;
+            }
+        }
+
+        body { font-family: 'Noto Sans Arabic', sans-serif; transition: background-color 0.3s; }
+        
+        /* تنسيق الجدول */
+        .table-container { flex-grow: 1; display: flex; flex-direction: column; border: 2px solid black; border-bottom: 0; }
+        .row-base { display: flex; border-bottom: 1px solid black; align-items: center; }
+        .header-base { display: flex; border-bottom: 1px solid black; align-items: center; font-weight: bold; background-color: #eee; }
+        .col-seq { width: 8%; border-left: 1px solid black; text-align: center; justify-content: center; height: 100%; display: flex; align-items: center; }
+        .col-name { border-left: 1px solid black; padding-right: 5px; text-align: right; height: 100%; display: flex; align-items: center; white-space: nowrap; overflow: hidden; }
+        .col-grade { border-left: 1px solid black; text-align: center; justify-content: center; font-family: monospace; font-weight: bold; height: 100%; display: flex; align-items: center; }
+        .col-text { flex: 1; text-align: center; justify-content: center; height: 100%; display: flex; align-items: center; }
+
+        .failing-grade { color: #dc2626 !important; text-decoration: underline; font-weight: bold; }
+        .stats-box { display: flex; border: 2px solid black; margin-top: 2px; height: 12mm; font-size: 0.85em; font-weight: bold; }
+        .stats-item { flex: 1; border-left: 1px solid black; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .stats-item:last-child { border-left: none; }
+        .page-footer { margin-top: 5px; padding-top: 5px; border-top: 2px solid black; display: flex; justify-content: space-between; font-weight: bold; font-size: 0.9em; }
+
+        .mic-active { animation: pulse-mic 1.5s infinite; background-color: #fee2e2 !important; color: #dc2626 !important; border-color: #ef4444 !important; }
+        @keyframes pulse-mic { 0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(220, 38, 38, 0); } 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); } }
+        
+        .updated-flash { animation: flash 1.5s; background-color: #bbf7d0 !important; }
+        @keyframes flash { 0% { background-color: #86efac; } 100% { background-color: white; } }
+        
+        .waiting-for-grade { background-color: #fef08a !important; border: 2px solid #eab308 !important; transform: scale(1.02); transition: all 0.3s; }
+
+        .modal-active { overflow: hidden; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100 pb-20">
+
+    <div class="bg-white dark:bg-gray-800 p-3 shadow-md sticky top-0 z-50 flex justify-between items-center no-print">
+        <h1 class="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <i class="fas fa-medal text-purple-600"></i> <span class="hidden sm:inline">السجل البلاتيني</span>
+        </h1>
+        <div class="flex gap-2 text-xs font-bold">
+            <button onclick="window.exportToWord()" class="bg-blue-800 text-white px-3 py-1.5 rounded shadow hover:bg-blue-900 flex gap-1 items-center"><i class="fas fa-file-word"></i> Word</button>
+            <button onclick="window.exportToExcel()" class="bg-green-600 text-white px-3 py-1.5 rounded shadow hover:bg-green-700 flex gap-1 items-center"><i class="fas fa-file-excel"></i> Excel</button>
+            <button onclick="window.printPDF()" class="bg-gray-700 text-white px-3 py-1.5 rounded shadow hover:bg-gray-800 flex gap-1 items-center"><i class="fas fa-print"></i> PDF</button>
+            <button onclick="window.toggleDarkMode()" class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center"><i class="fas fa-adjust"></i></button>
+        </div>
+    </div>
+
+    <div class="max-w-xl mx-auto p-4 no-print space-y-4">
+        
+        <div class="flex bg-gray-200 dark:bg-gray-700 p-1 rounded-lg shadow-inner">
+            <button onclick="switchTab('input')" id="btn-input" class="flex-1 py-2 text-xs font-bold rounded-md bg-white shadow text-purple-700">إدخال</button>
+            <button onclick="switchTab('smart')" id="btn-smart" class="flex-1 py-2 text-xs font-bold rounded-md text-gray-500 hover:bg-gray-50">رصد صوتي</button>
+            <button onclick="switchTab('preview')" id="btn-preview" class="flex-1 py-2 text-xs font-bold rounded-md text-gray-500 hover:bg-gray-50">معاينة</button>
+            <button onclick="switchTab('settings')" id="btn-settings" class="flex-1 py-2 text-xs font-bold rounded-md text-gray-500 hover:bg-gray-50">إعدادات</button>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2">
+            <button onclick="setList('right')" id="list-right" class="py-1 text-xs font-bold rounded border-2 border-purple-500 bg-purple-50 text-purple-900">أ</button>
+            <button onclick="setList('left')" id="list-left" class="py-1 text-xs font-bold rounded border-2 border-transparent bg-white text-gray-500">ب</button>
+            <button onclick="setList('right2')" id="list-right2" class="py-1 text-xs font-bold rounded border-2 border-transparent bg-white text-gray-500">ج</button>
+            <button onclick="setList('left2')" id="list-left2" class="py-1 text-xs font-bold rounded border-2 border-transparent bg-white text-gray-500">د</button>
+        </div>
+
+        <!-- 1. واجهة الإدخال -->
+        <div id="view-input">
+            <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded border border-blue-100 dark:border-blue-800 mb-3 cursor-pointer" onclick="document.getElementById('importArea').classList.toggle('hidden')">
+                <div class="flex justify-between items-center text-xs font-bold text-blue-800 dark:text-blue-300">
+                    <span><i class="fas fa-paste"></i> لصق ذكي (نسخ الأسماء)</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+            <div id="importArea" class="hidden mb-3">
+                <textarea id="importText" class="w-full h-24 border p-2 text-sm rounded bg-white dark:bg-gray-700 dark:text-white mb-2" placeholder="انسخ الأسماء من Excel وألصقها هنا..."></textarea>
+                <button onclick="processImport()" class="w-full bg-blue-600 text-white py-1.5 rounded text-sm font-bold">معالجة البيانات</button>
+            </div>
+            
+            <div class="flex gap-2 mb-2">
+                <input id="manualInput" class="flex-1 border p-2 rounded text-sm dark:bg-gray-700 dark:text-white" placeholder="إضافة طالب (اسم فقط)">
+                <button onclick="addManual()" class="bg-purple-600 text-white w-10 rounded"><i class="fas fa-plus"></i></button>
+            </div>
+            
+            <div id="studentsListSimple" class="space-y-1"></div>
+        </div>
+
+        <!-- 2. واجهة الرصد الصوتي -->
+        <div id="view-smart" class="hidden text-center">
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-purple-100 dark:border-gray-700 mb-4">
+                <button id="micBtn" onclick="toggleVoice()" class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-gray-200 transition-all hover:bg-gray-200">
+                    <i id="micIcon" class="fas fa-microphone text-3xl text-gray-400"></i>
+                </button>
+                <p class="text-sm font-bold dark:text-white" id="voiceStatus">اضغط للبدء</p>
+                <div id="voiceLog" class="mt-2 text-blue-600 font-bold text-sm h-6">...</div>
+            </div>
+            <div id="studentsListSmart" class="space-y-1 text-right"></div>
+        </div>
+
+        <!-- 3. واجهة المعاينة -->
+        <div id="view-preview" class="hidden">
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow mb-4 sticky top-16 z-40 border-b-4 border-blue-500">
+                <div class="grid grid-cols-2 gap-4 mb-3">
+                    <div><label class="text-[10px] font-bold text-gray-500 block">عرض الاسم</label><input type="range" min="30" max="60" id="widthName" class="w-full h-2 bg-gray-200 rounded-lg accent-purple-600" oninput="updateConfig('nameColWidth', this.value)"></div>
+                    <div><label class="text-[10px] font-bold text-gray-500 block">عرض "رقماً"</label><input type="range" min="10" max="25" id="widthGrade" class="w-full h-2 bg-gray-200 rounded-lg accent-purple-600" oninput="updateConfig('gradeColWidth', this.value)"></div>
+                </div>
+                <div class="mb-4">
+                    <label class="flex justify-between text-xs font-bold text-gray-600 mb-1"><span>ارتفاع الصفوف</span><span id="rowsDisplay" class="text-blue-600">40</span></label>
+                    <input type="range" min="20" max="55" id="rowsRange" class="w-full h-2 bg-gray-200 rounded-lg accent-blue-600" oninput="updateRows(this.value)">
+                </div>
+                <div class="grid grid-cols-3 gap-2 mb-3 text-center">
+                    <div><label class="text-[10px] text-gray-500">خط الأسماء</label><input type="number" id="fsName" class="border rounded w-full text-center text-xs p-1" onchange="updateConfig('fsName', this.value)"></div>
+                    <div><label class="text-[10px] text-gray-500">خط الأرقام</label><input type="number" id="fsGrade" class="border rounded w-full text-center text-xs p-1" onchange="updateConfig('fsGrade', this.value)"></div>
+                    <div><label class="text-[10px] text-gray-500">العناوين</label><input type="number" id="fsHeader" class="border rounded w-full text-center text-xs p-1" onchange="updateConfig('fsHeader', this.value)"></div>
+                </div>
+                <div class="flex gap-2 border-t pt-2">
+                    <button onclick="setPrintMode('double')" id="pm-double" class="flex-1 py-1 text-xs border rounded bg-blue-50 text-blue-800 font-bold">جدولين</button>
+                    <button onclick="setPrintMode('right')" id="pm-right" class="flex-1 py-1 text-xs border rounded hover:bg-gray-50">أ</button>
+                    <button onclick="setPrintMode('left')" id="pm-left" class="flex-1 py-1 text-xs border rounded hover:bg-gray-50">ب</button>
+                </div>
+            </div>
+            <div id="previewArea" class="bg-gray-300 p-4 overflow-auto h-[600px] flex flex-col items-center gap-4"></div>
+        </div>
+
+        <!-- 4. الإعدادات -->
+        <div id="view-settings" class="hidden">
+            <div class="bg-white dark:bg-gray-800 p-5 rounded-xl shadow space-y-3">
+                <button onclick="clearData()" class="w-full bg-red-100 text-red-600 py-2 rounded font-bold text-sm hover:bg-red-200">مسح كافة البيانات</button>
+                <input id="confTitle" class="w-full border p-2 rounded text-sm" placeholder="العنوان" oninput="updateConfig('title', this.value)">
+                <input id="confSchool" class="w-full border p-2 rounded text-sm" placeholder="المدرسة" oninput="updateConfig('school', this.value)">
+                <div class="grid grid-cols-2 gap-2">
+                    <input id="confTeacher" class="border p-2 rounded text-sm" placeholder="المعلم" oninput="updateConfig('teacher', this.value)">
+                    <input id="confSubject" class="border p-2 rounded text-sm" placeholder="المادة" oninput="updateConfig('subject', this.value)">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <input id="confClass" class="border p-2 rounded text-sm" placeholder="الصف" oninput="updateConfig('class', this.value)">
+                    <input id="confMonth" class="border p-2 rounded text-sm" placeholder="الشهر" oninput="updateConfig('month', this.value)">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <input id="confDate" class="border p-2 rounded text-sm" placeholder="التاريخ" oninput="updateConfig('date', this.value)">
+                    <!-- إضافة السنة الدراسية هنا -->
+                    <input id="confYear" class="border p-2 rounded text-sm" placeholder="السنة (2024 / 2025)" oninput="updateConfig('year', this.value)">
+                </div>
+                
+                <div class="flex items-center justify-between mt-2 pt-2 border-t">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="checkIndic" class="accent-purple-600" onchange="updateConfig('useIndic', this.checked)">
+                        <label for="checkIndic" class="text-sm font-bold text-gray-700 dark:text-gray-300">أرقام ١٢٣</label>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="checkStats" class="accent-green-600" onchange="updateConfig('showStats', this.checked)">
+                        <label for="checkStats" class="text-sm font-bold text-gray-700 dark:text-gray-300">إظهار الإحصائيات</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال التعديل -->
+    <div id="editModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-gray-800 w-80 p-5 rounded-lg shadow-2xl transform scale-100 transition-all">
+            <h3 class="font-bold text-lg mb-4 text-gray-800 dark:text-white border-b pb-2">تعديل بيانات الطالب</h3>
+            <div class="space-y-3">
+                <div><label class="text-xs text-gray-500 block">الاسم</label><input id="editName" class="w-full border rounded p-2 dark:bg-gray-700 dark:text-white"></div>
+                <div><label class="text-xs text-gray-500 block">رقماً (تلقائي التفقيط)</label><input id="editGrade" class="w-full border rounded p-2 dark:bg-gray-700 dark:text-white" oninput="updateModalText(this.value)"></div>
+                <div><label class="text-xs text-gray-500 block">كتابة</label><input id="editText" class="w-full border rounded p-2 bg-gray-100 dark:bg-gray-600 dark:text-white" readonly></div>
+                <input type="hidden" id="editId">
+            </div>
+            <div class="flex justify-between mt-6">
+                <button onclick="deleteStudentFromModal()" class="text-red-500 text-sm font-bold px-3 hover:bg-red-50 rounded">حذف</button>
+                <div class="flex gap-2">
+                    <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300">إلغاء</button>
+                    <button onclick="saveStudentFromModal()" class="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">حفظ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="printContainer"></div>
+
+    <script>
+        // --- دوال الأمان ---
+        function getEl(id) { return document.getElementById(id); }
+        function setVal(id, val) { const el = getEl(id); if(el) el.value = val; }
+        function setCheck(id, val) { const el = getEl(id); if(el) el.checked = val; }
+
+        // --- البيانات ---
+        let data = { right: [], left: [], right2: [], left2: [] };
+        let currentList = 'right';
+        let pendingStudentId = null;
+
+        let config = {
+            school: "مدرسة المتفوقين", title: "سجل الدرجات", year: "2024 / 2025",
+            subject: "اللغة العربية", month: "تشرين الأول", teacher: "محمد أحمد", class: "الخامس",
+            titleR: "شعبة أ", titleL: "شعبة ب", titleR2: "شعبة ج", titleL2: "شعبة د",
+            date: new Date().toLocaleDateString('ar-IQ'),
+            fsName: 11, fsGrade: 12, fsHeader: 14, rowsPerPage: 40,
+            nameColWidth: 45, gradeColWidth: 15,
+            printMode: 'double', showStats: true, useIndic: true
+        };
+
+        const iraqiNums = {
+            'صفر':0,'واحد':1,'اثنين':2,'تلاثة':3,'ثلاثة':3,'تلاثه':3,'اربعة':4,'اربع':4,'خمسة':5,'خمس':5,'ستة':6,'سته':6,'سبعة':7,'سبع':7,'ثمانية':8,'تمنية':8,'تسعة':9,'عشرة':10,'عشره':10,
+            'دعش':11,'احدعش':11,'اثنعش':12,'تلطعش':13,'ثلطعش':13,'اربعطعش':14,'خموسطعش':15,'خمسطعش':15,'سطعش':16,'سبعطعش':17,'ثمنطعش':18,'تسعطعش':19,
+            'عشرين':20,'تلاثين':30,'ثلاثين':30,'اربعين':40,'خمسين':50,'ستين':60,'سبعين':70,'ثمانين':80,'تمنين':80,'تسعين':90,'مية':100,'ميه':100
+        };
+
+        // --- معالجة الأرقام والنصوص ---
+        function normalizeNumber(str) {
+            if(!str) return "";
+            return str.toString().replace(/[٠-٩]/g, d => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)]);
+        }
+
+        function toIndic(n) {
+            if (!config.useIndic || n === null || n === undefined || n === "غائب" || n === "") return n;
+            return n.toString().replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[d]);
+        }
+
+        function numToText(n) {
+            if (!n && n !== 0) return "";
+            if (n.toString().trim() === "غائب") return "غائب";
+            let num = parseInt(normalizeNumber(n));
+            if (isNaN(num)) return "";
+            if (num === 0) return "صفر"; if (num === 100) return "مائة";
+            const u = ["", "واحد", "اثنان", "ثلاثة", "أربعة", "خمسة", "ستة", "سبعة", "ثمانية", "تسعة"];
+            const t = ["", "عشرة", "عشرون", "ثلاثون", "أربعون", "خمسون", "ستون", "سبعون", "ثمانون", "تسعون"];
+            if (num < 10) return u[num];
+            if (num < 20) return ["عشرة", "أحد عشر", "اثنا عشر", "ثلاثة عشر", "أربعة عشر", "خمسة عشر", "ستة عشر", "سبعة عشر", "ثمانية عشر", "تسعة عشر"][num - 10];
+            let d1 = num % 10, d10 = Math.floor(num / 10);
+            return (d1 === 0 ? t[d10] : (d1 === 1 ? "إحدى" : d1 === 2 ? "اثنان" : u[d1]) + " و" + t[d10]);
+        }
+
+        function createStudent(name, grade = "") {
+            let normGrade = normalizeNumber(grade);
+            return { 
+                id: Date.now() + Math.random(), 
+                name: name, 
+                grade: grade, 
+                normGrade: normGrade, 
+                text: numToText(normGrade), 
+                isAbsent: (grade === "غائب") 
+            };
+        }
+
+        // --- التبويبات ---
+        function switchTab(tab) {
+            ['input', 'smart', 'preview', 'settings'].forEach(t => {
+                const view = getEl('view-' + t); if (view) view.classList.add('hidden');
+                const btn = getEl('btn-' + t); if (btn) btn.className = "flex-1 py-2 text-xs font-bold rounded-md text-gray-500 hover:bg-gray-50 transition-all";
+            });
+            const activeView = getEl('view-' + tab); if (activeView) activeView.classList.remove('hidden');
+            const activeBtn = getEl('btn-' + tab); if (activeBtn) activeBtn.className = "flex-1 py-2 text-xs font-bold rounded-md bg-white shadow text-purple-700 transition-all";
+            
+            if(tab === 'preview') renderPreview();
+            else if(tab === 'settings') loadConfigUI();
+            
+            renderList('studentsListSimple'); renderList('studentsListSmart');
+        }
+
+        function setList(l) {
+            currentList = l;
+            pendingStudentId = null; 
+            stopVoiceUI();
+            ['right', 'left', 'right2', 'left2'].forEach(k => {
+                const btn = getEl('list-' + k);
+                if (btn) btn.className = k === l ? "py-1 text-xs font-bold rounded border-2 border-purple-500 bg-purple-50 text-purple-900" : "py-1 text-xs font-bold rounded border-2 border-transparent bg-white text-gray-500";
+            });
+            renderList('studentsListSimple'); renderList('studentsListSmart');
+        }
+
+        // --- اللصق الذكي ---
+        function processImport() {
+            const txt = getEl('importText').value;
+            const lines = txt.split(/\n/);
+            let count = 0;
+            lines.forEach(l => {
+                let clean = l.replace(/^\d+[\.\-\)]\s*/, '').trim(); 
+                if (clean.length > 1) {
+                    let parts = clean.split(/[\t\s]{2,}/); 
+                    let name = parts[0].trim();
+                    let grade = "";
+                    if(parts.length === 1) {
+                        let match = name.match(/^(.*?)[\s\t]+([0-9٠-٩]+|غائب)$/);
+                        if(match) { name = match[1].trim(); grade = match[2]; }
+                    } else if (parts.length > 1) {
+                        grade = parts[parts.length-1].trim();
+                    }
+                    data[currentList].push(createStudent(name, grade)); 
+                    count++;
+                }
+            });
+            data[currentList].sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+            saveData(); renderList('studentsListSimple');
+            getEl('importText').value = "";
+            alert(`تم إضافة ${count} طالب`);
+        }
+
+        function addManual() {
+            const val = getEl('manualInput').value.trim();
+            if(val) {
+                data[currentList].push(createStudent(val));
+                data[currentList].sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+                saveData(); renderList('studentsListSimple');
+                getEl('manualInput').value = "";
+            }
+        }
+
+        // --- المودال ---
+        function openEditModal(id) {
+            const s = data[currentList].find(x => x.id === id);
+            if(!s) return;
+            setVal('editName', s.name);
+            setVal('editGrade', s.grade);
+            setVal('editText', s.text);
+            setVal('editId', s.id);
+            const m = getEl('editModal');
+            if(m) { m.classList.remove('hidden'); document.body.classList.add('modal-active'); }
+        }
+        function updateModalText(val) { getEl('editText').value = numToText(val); }
+        function closeModal() {
+            const m = getEl('editModal');
+            if(m) { m.classList.add('hidden'); document.body.classList.remove('modal-active'); }
+        }
+        function saveStudentFromModal() {
+            const id = parseFloat(getEl('editId').value);
+            const s = data[currentList].find(x => x.id === id);
+            if(s) {
+                s.name = getEl('editName').value;
+                let g = getEl('editGrade').value;
+                let updated = createStudent(s.name, g);
+                s.grade = updated.grade; s.normGrade = updated.normGrade;
+                s.text = updated.text; s.isAbsent = updated.isAbsent;
+                saveData(); renderList('studentsListSimple'); renderList('studentsListSmart');
+                closeModal();
+            }
+        }
+        function deleteStudentFromModal() {
+            if(confirm("حذف الطالب؟")) {
+                const id = parseFloat(getEl('editId').value);
+                data[currentList] = data[currentList].filter(x => x.id !== id);
+                saveData(); renderList('studentsListSimple'); renderList('studentsListSmart');
+                closeModal();
+            }
+        }
+
+        // --- الصوت (المنطق الجديد - الانتظار) ---
+        let recognition, isRecording = false;
+        function toggleVoice() { if(isRecording) stopVoice(); else startVoice(); }
+        function startVoice() {
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if(!SR) return alert("المتصفح لا يدعم");
+            recognition = new SR(); recognition.lang = 'ar-IQ'; recognition.continuous = true; recognition.interimResults = false;
+            recognition.onstart = () => { isRecording=true; getEl('micIcon').className="fas fa-microphone text-3xl text-red-600"; getEl('micBtn').classList.add('mic-active'); getEl('voiceStatus').innerText="استمع..."; };
+            recognition.onend = () => { if(isRecording) try{recognition.start()}catch(e){} else stopVoiceUI(); };
+            recognition.onresult = (e) => { const t = e.results[e.results.length-1][0].transcript; getEl('voiceLog').innerText=t; processVoice(t); };
+            recognition.start();
+        }
+        function stopVoice() { isRecording=false; if(recognition) recognition.stop(); stopVoiceUI(); }
+        function stopVoiceUI() { 
+            getEl('micIcon').className="fas fa-microphone text-3xl text-gray-400"; getEl('micBtn').classList.remove('mic-active'); getEl('voiceStatus').innerText="اضغط للبدء"; 
+            pendingStudentId = null; 
+            renderList('studentsListSmart');
+        }
+        
+        function normalize(s) { return s.replace(/(أ|إ|آ)/g,'ا').replace(/(ة|ه)/g,'ه').replace(/ى/g,'ي').replace(/ال/g,'').trim(); }
+
+        function processVoice(txt) {
+            let g = null;
+            let match = txt.match(/\d+/);
+            if(match) g = parseInt(match[0]);
+            else { for(let k in iraqiNums) if(txt.includes(k)) { g = iraqiNums[k]; break; } }
+            let isAbs = txt.includes("غائب");
+
+            if (pendingStudentId !== null) {
+                if (g !== null || isAbs) {
+                    let gradeVal = isAbs ? "غائب" : g.toString();
+                    applyGradeToStudent(pendingStudentId, gradeVal);
+                    pendingStudentId = null; 
+                    getEl('voiceStatus').innerText = "تم الرصد. استمع لاسم جديد...";
+                    renderList('studentsListSmart');
+                } else {
+                    checkNameAndSetPending(txt);
+                }
+                return;
+            }
+
+            if ((g !== null || isAbs) && txt.replace(/\d+|غائب/g,'').trim().length > 2) {
+                let name = txt;
+                for(let k in iraqiNums) name = name.replace(k, '');
+                name = name.replace(/\d+/g,'').replace(/(غائب|درجة)/g,'').trim();
+                findAndUpdateDirect(name, isAbs ? "غائب" : g.toString());
+            } else {
+                checkNameAndSetPending(txt);
+            }
+        }
+
+        function checkNameAndSetPending(txt) {
+            let list = data[currentList];
+            let target = normalize(txt);
+            let idx = list.findIndex(s => { let n = normalize(s.name); return n.length > 2 && (n.includes(target) || target.includes(n)); });
+            
+            if (idx !== -1) {
+                pendingStudentId = list[idx].id;
+                getEl('voiceStatus').innerText = `تم تحديد: ${list[idx].name}.. قل الدرجة الآن`;
+                getEl('voiceStatus').className = "text-sm font-bold text-yellow-600";
+                renderList('studentsListSmart');
+                setTimeout(() => { 
+                    const el = getEl('row-'+list[idx].id); 
+                    if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); 
+                }, 100);
+            }
+        }
+
+        function applyGradeToStudent(id, grade) {
+            let list = data[currentList];
+            let idx = list.findIndex(s => s.id === id);
+            if (idx !== -1) {
+                let updated = createStudent(list[idx].name, grade);
+                list[idx].grade = updated.grade; list[idx].normGrade = updated.normGrade;
+                list[idx].isAbsent = updated.isAbsent; list[idx].text = updated.text;
+                list[idx].justUpdated = true;
+                saveData();
+            }
+        }
+
+        function findAndUpdateDirect(name, grade) {
+            let list = data[currentList];
+            let target = normalize(name);
+            let idx = list.findIndex(s => { let n = normalize(s.name); return n.includes(target) || target.includes(n); });
+            if(idx !== -1) {
+                applyGradeToStudent(list[idx].id, grade);
+                renderList('studentsListSmart');
+                setTimeout(() => { 
+                    const el = getEl('row-'+list[idx].id); 
+                    if(el) { el.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(()=>list[idx].justUpdated=false, 2000); }
+                }, 100);
+            }
+        }
+
+        // --- العرض ---
+        function renderList(targetId) {
+            const c = getEl(targetId); if(!c) return;
+            const list = data[currentList];
+            if(!list.length) { c.innerHTML = '<div class="text-center text-gray-400 p-4">القائمة فارغة</div>'; return; }
+            let h = '';
+            list.forEach((s,i) => {
+                let flash = s.justUpdated ? 'updated-flash' : '';
+                let waiting = (s.id === pendingStudentId) ? 'waiting-for-grade' : '';
+                
+                let numG = parseInt(s.normGrade);
+                let colorClass = s.isAbsent ? 'text-red-500 font-bold' : (!isNaN(numG) && numG < 50 ? 'failing-grade' : 'text-green-600 font-bold');
+                
+                h += `<div id="row-${s.id}" class="bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 flex justify-between items-center ${flash} ${waiting} transition-colors duration-500 mb-1">
+                    <div class="flex items-center gap-2 w-2/3 cursor-pointer" onclick="openEditModal(${s.id})">
+                        <span class="bg-gray-100 dark:bg-gray-700 w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold">${i+1}</span>
+                        <span class="font-bold text-sm truncate dark:text-white">${s.name}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="font-mono text-lg ${colorClass}">${s.grade||'-'}</span>
+                        <button onclick="openEditModal(${s.id})" class="text-blue-500"><i class="fas fa-pen"></i></button>
+                    </div>
+                </div>`;
+            });
+            c.innerHTML = h;
+        }
+
+        // --- محرك الطباعة A4 ---
+        function updateRows(val) { config.rowsPerPage = parseInt(val); getEl('rowsDisplay').innerText = val; updateConfig('rowsPerPage', val); }
+        function setPrintMode(m) {
+            config.printMode = m;
+            ['double','right','left'].forEach(k => getEl('pm-'+k).className = k===m ? "flex-1 py-1 text-xs border rounded bg-blue-50 text-blue-800 font-bold":"flex-1 py-1 text-xs border rounded hover:bg-gray-50");
+            saveData(); renderPreview();
+        }
+
+        function getStats(list) {
+            let tot=list.length, pass=0, abs=0;
+            list.forEach(s => { 
+                if(s.isAbsent) abs++; 
+                else if(parseInt(s.normGrade)>=50) pass++; 
+            });
+            let fail = tot - pass - abs;
+            let per = (tot - abs) > 0 ? Math.round((pass/(tot-abs))*100)+'%' : '0%';
+            return { tot, pass, fail, per, abs };
+        }
+
+        function renderPreview() {
+            const area = getEl('previewArea'); if(!area) return;
+            
+            const tplPage = (c) => `<div class="a4-page">${c}</div>`;
+            const tplHeader = (t, p, tp) => `
+                <div class="flex justify-between items-start border-b-2 border-black pb-2 mb-1" style="font-size:${config.fsHeader}pt; min-height:25mm;">
+                    <div class="w-1/3 text-right"><div>${config.school}</div><div class="text-[0.8em]">الصف: ${config.class} | المادة: ${config.subject}</div></div>
+                    <div class="w-1/3 text-center"><div class="border-2 border-black px-2 py-1 rounded inline-block bg-gray-50">${t}</div><div class="text-[0.8em] mt-1">${toIndic(config.year)}</div></div>
+                    <div class="w-1/3 text-left"><div>${config.month}</div><div class="text-[0.8em]">ص ${toIndic(p)} / ${toIndic(tp)}</div></div>
+                </div>`;
+            
+            const tplStats = (l) => {
+                if(!config.showStats || !l.length) return '';
+                const s = getStats(l);
+                return `<div class="stats-box"><div class="stats-item bg-gray-100"><span>العدد</span><span>${toIndic(s.tot)}</span></div><div class="stats-item text-green-800"><span>ناجح</span><span>${toIndic(s.pass)}</span></div><div class="stats-item text-red-800"><span>راسب</span><span>${toIndic(s.fail)}</span></div><div class="stats-item text-blue-800"><span>%</span><span>${toIndic(s.per)}</span></div></div>`;
+            };
+            
+            const tplFooter = () => `
+                <div class="page-footer" style="min-height:15mm;">
+                    <div class="w-1/3 text-right">التوقيع: .....................</div>
+                    <div class="w-1/3 text-center">المعلم: ${config.teacher}</div>
+                    <div class="w-1/3 text-left">التاريخ: <span dir="ltr">${toIndic(config.date)}</span></div>
+                </div>`;
+            
+            const tplTable = (list, start) => {
+                let h = `<div class="table-container">
+                    <div class="header-base text-[0.9em]">
+                        <div class="col-seq border-t-0">ت</div>
+                        <div class="col-name border-t-0 text-center !important" style="justify-content:center; width:${config.nameColWidth}%">الاسم</div>
+                        <div class="col-grade border-t-0" style="width:${config.gradeColWidth}%">رقماً</div>
+                        <div class="col-text border-t-0">كتابة</div>
+                    </div>`;
+                
+                for(let i=0; i<config.rowsPerPage; i++) {
+                    let s = list[i];
+                    if(s) {
+                        let numG = parseInt(s.normGrade);
+                        let isFail = !s.isAbsent && !isNaN(numG) && numG < 50;
+                        let styleFail = isFail ? "color:red; text-decoration:underline; font-weight:bold" : "";
+                        
+                        h += `<div class="row-base text-black flex-grow" style="font-size:${config.fsGrade}pt">
+                            <div class="col-seq">${toIndic(start+i)}</div>
+                            <div class="col-name" style="font-size:${config.fsName}pt; width:${config.nameColWidth}%">${s.name}</div>
+                            <div class="col-grade" style="width:${config.gradeColWidth}%; ${styleFail}">${toIndic(s.grade)}</div>
+                            <div class="col-text">${s.text}</div>
+                        </div>`;
+                    }
+                    else h += `<div class="row-base flex-grow"><div class="col-seq"></div><div class="col-name" style="width:${config.nameColWidth}%"></div><div class="col-grade" style="width:${config.gradeColWidth}%"></div><div class="col-text"></div></div>`;
+                }
+                return h + `</div>`;
+            };
+
+            let pairs = [];
+            if(config.printMode==='double') pairs.push({l1:data.right, l2:data.left, t1:config.titleR, t2:config.titleL}, {l1:data.right2, l2:data.left2, t1:config.titleR2, t2:config.titleL2});
+            else if(config.printMode==='right') pairs.push({l1:data.right, l2:[], t1:config.titleR, t2:""});
+            else pairs.push({l1:[], l2:data.left, t1:"", t2:config.titleL});
+
+            let html = "";
+            pairs.forEach(pair => {
+                let max = Math.max(pair.l1.length, pair.l2.length);
+                if(max===0 && config.printMode!=='double') return;
+                let pages = Math.ceil(max/config.rowsPerPage) || 1;
+                
+                for(let p=0; p<pages; p++) {
+                    let s = p*config.rowsPerPage, e = s+config.rowsPerPage;
+                    let c1 = pair.l1.slice(s,e), c2 = pair.l2.slice(s,e);
+                    
+                    let content = tplHeader(config.title, p+1, pages);
+                    content += `<div class="flex gap-4 flex-grow w-full mb-1">`;
+                    
+                    if(config.printMode !== 'left') {
+                        content += `<div class="flex flex-col w-full h-full">
+                            <div class="text-center font-bold mb-1 border-b border-black">${pair.t1}</div>
+                            ${tplTable(c1, s+1)}
+                            ${(p === pages-1) ? tplStats(pair.l1) : ''}
+                        </div>`;
+                    }
+                    if(config.printMode !== 'right') {
+                        content += `<div class="flex flex-col w-full h-full">
+                            <div class="text-center font-bold mb-1 border-b border-black">${pair.t2}</div>
+                            ${tplTable(c2, s+1)}
+                            ${(p === pages-1) ? tplStats(pair.l2) : ''}
+                        </div>`;
+                    }
+                    content += `</div>`;
+                    content += tplFooter();
+                    html += tplPage(content);
+                }
+            });
+            area.innerHTML = html;
+        }
+
+        function printPDF() {
+            const pc = getEl('printContainer');
+            if(pc) {
+                renderPreview(); 
+                pc.innerHTML = getEl('previewArea').innerHTML;
+                setTimeout(() => window.print(), 500);
+            }
+        }
+
+        function exportToWord() {
+            if(Object.values(data).every(x => !x.length)) return alert("لا توجد بيانات");
+            let head = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>body{font-family:Arial} table{border-collapse:collapse;width:100%;margin-bottom:10px} td,th{border:1px solid black;text-align:center;padding:4px}</style></head><body>`;
+            let body = "";
+            
+            const makeTable = (list, title) => {
+                if(!list.length) return "";
+                let t = `<h2 style="text-align:center">${config.school} - ${title}</h2><p style="text-align:center">الصف: ${config.class} | المادة: ${config.subject}</p><table><tr style="background:#eee;font-weight:bold"><th width="5%">ت</th><th width="45%">الاسم</th><th width="15%">رقماً</th><th>كتابة</th></tr>`;
+                list.forEach((s,i) => {
+                    let numG = parseInt(s.normGrade);
+                    let failStyle = (!s.isAbsent && numG < 50) ? 'color:red; text-decoration:underline; font-weight:bold' : '';
+                    t += `<tr><td>${toIndic(i+1)}</td><td style="text-align:right">${s.name}</td><td style="${failStyle}">${toIndic(s.grade)}</td><td>${s.text}</td></tr>`;
+                });
+                t += `</table>`;
+                if(config.showStats) {
+                    const st = getStats(list);
+                    t += `<table style="margin-top:0;border-top:0"><tr><td>العدد: ${toIndic(st.tot)}</td><td>ناجح: ${toIndic(st.pass)}</td><td>راسب: ${toIndic(st.fail)}</td><td>%: ${toIndic(st.per)}</td></tr></table>`;
+                }
+                t += `<br/><div style="display:flex;justify-content:space-between;direction:rtl"><span>التوقيع: .......</span><span>المعلم: ${config.teacher}</span><span>التاريخ: ${toIndic(config.date)}</span></div><br style="page-break-after:always"/>`;
+                return t;
+            };
+
+            ['right','left','right2','left2'].forEach((k,i) => { body += makeTable(data[k], [config.titleR,config.titleL,config.titleR2,config.titleL2][i]); });
+            
+            let blob = new Blob(['\ufeff', head+body+"</body></html>"], {type:'application/msword'});
+            let url = URL.createObjectURL(blob);
+            let link = document.createElement("a"); link.href=url; link.download="سجل.doc"; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        function updateConfig(k, v) { config[k] = v; saveData(); if(!getEl('view-preview').classList.contains('hidden')) renderPreview(); }
+        function loadConfigUI() {
+            ['Title','School','Teacher','Subject','Class','Month','Date','Year'].forEach(k => setVal('conf'+k, config[k.toLowerCase()]));
+            setCheck('checkIndic', config.useIndic); setCheck('checkStats', config.showStats);
+            setVal('widthName', config.nameColWidth); setVal('widthGrade', config.gradeColWidth);
+        }
+        function saveData() { localStorage.setItem('grades_v19_data', JSON.stringify(data)); localStorage.setItem('grades_v19_config', JSON.stringify(config)); }
+        function loadData() {
+            let d = localStorage.getItem('grades_v19_data'), c = localStorage.getItem('grades_v19_config');
+            if(d) data = JSON.parse(d); if(c) config = {...config, ...JSON.parse(c)};
+            
+            config.rowsPerPage = config.rowsPerPage || 40;
+            config.fsName = config.fsName || 11; config.fsGrade = config.fsGrade || 12; config.fsHeader = config.fsHeader || 14;
+            config.nameColWidth = config.nameColWidth || 45; config.gradeColWidth = config.gradeColWidth || 15;
+            config.year = config.year || "2024 / 2025";
+
+            setVal('fsName', config.fsName); setVal('fsGrade', config.fsGrade); setVal('fsHeader', config.fsHeader);
+            setVal('rowsDisplay', config.rowsPerPage); getEl('rowsDisplay').innerText = config.rowsPerPage;
+            setVal('rowsRange', config.rowsPerPage);
+            setVal('widthName', config.nameColWidth); setVal('widthGrade', config.gradeColWidth);
+            setCheck('checkStats', config.showStats); setCheck('checkIndic', config.useIndic);
+            
+            setList('right'); setPrintMode(config.printMode || 'double');
+        }
+
+        window.onload = loadData;
+        window.exportToExcel = () => {
+            let csv = "\uFEFFت,الاسم,رقماً,كتابة,الشعبة\n";
+            ['right','left','right2','left2'].forEach((k, i) => {
+                let t = [config.titleR, config.titleL, config.titleR2, config.titleL2][i];
+                data[k].forEach((s, x) => csv += `"${x+1}","${s.name}","${s.grade}","${s.text}","${t}"\n`);
+            });
+            let link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'})); link.download = "سجل.csv"; link.click();
+        }
+        window.toggleDarkMode = () => document.documentElement.classList.toggle('dark');
+        window.clearData = () => { if(confirm('مسح الكل؟')) { data={right:[],left:[],right2:[],left2:[]}; saveData(); renderList('studentsListSimple'); } };
+    </script>
+</body>
+</html>
